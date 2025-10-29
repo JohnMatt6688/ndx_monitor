@@ -21,27 +21,35 @@ def get_config():
     }
 
 def get_market_data(ticker):
-    """获取最新市场数据（仅限最近一个交易日）"""
+    """获取最新市场数据，并验证是否为今日交易日（UTC）"""
     try:
         stock = yf.Ticker(ticker)
-        hist = stock.history(period='5d')  # 获取最近5天以防周末/节假日
+        # 获取最近5天数据，确保覆盖周末/节假日
+        hist = stock.history(period='5d')
         if hist.empty:
-            print("未获取到任何历史数据")
+            print("❌ 未获取到任何历史数据")
             return None
+
         latest = hist.iloc[-1]
-        latest_date = latest.name  # pandas Timestamp, tz-aware or naive
-        # 转为 UTC 日期用于比较
+        latest_date = latest.name  # pandas Timestamp
+
+        # 确保时区为 UTC
         if latest_date.tz is None:
             latest_date = latest_date.tz_localize('UTC')
         else:
             latest_date = latest_date.tz_convert('UTC')
+
         today_utc = datetime.now(timezone.utc).date()
+
         if latest_date.date() != today_utc:
-            print(f"最新交易日 {latest_date.date()} 不是今天（{today_utc}），跳过处理（可能是周末或节假日）")
+            print(f"📅 最新交易日为 {latest_date.date()}，今日（{today_utc}）无交易（周末或节假日），跳过处理")
             return None
+
+        print(f"📈 获取到今日（{today_utc}）交易数据")
         return latest
+
     except Exception as e:
-        print(f"获取数据失败: {e}")
+        print(f"❌ 获取数据失败: {e}")
         return None
 
 def send_alert(config, current_data):
@@ -51,7 +59,8 @@ def send_alert(config, current_data):
         msg = MIMEMultipart()
         msg['From'] = config['EMAIL_FROM']
         msg['To'] = config['EMAIL_TO']
-        msg['Subject'] = f"NDX警报: 单日跌幅{change_pct*100:.2f}%"
+        msg['Subject'] = f"NDX警报: 单日跌幅 {change_pct*100:.2f}%"
+
         body = f"""纳斯达克100指数异常波动：
 开盘价: {current_data['Open']:.2f}
 收盘价: {current_data['Close']:.2f}
@@ -61,37 +70,43 @@ def send_alert(config, current_data):
 成交量: {current_data['Volume']:,.0f}
 """
         msg.attach(MIMEText(body, 'plain'))
+
         with smtplib.SMTP(config['SMTP_SERVER'], config['SMTP_PORT']) as server:
             server.starttls()
             server.login(config['SMTP_USERNAME'], config['SMTP_PASSWORD'])
             server.send_message(msg)
-        print("警报邮件发送成功")
+
+        print("✅ 警报邮件发送成功")
     except Exception as e:
-        print(f"邮件发送失败: {e}")
+        print(f"❌ 邮件发送失败: {e}")
 
 def save_data(config, data):
-    """保存每日数据到CSV（避免重复）"""
+    """保存数据到 CSV，避免重复写入同一天"""
     try:
+        new_date = data['Date']
         df_new = pd.DataFrame([data])
+
         if os.path.exists(config['DATA_FILE']):
             existing = pd.read_csv(config['DATA_FILE'], parse_dates=['Date'])
-            # 检查是否已存在当天数据
-            if data['Date'] in existing['Date'].dt.strftime('%Y-%m-%d').values:
-                print(f"今日数据（{data['Date']}）已存在，跳过保存")
+            # 检查是否已存在该日期
+            if new_date in existing['Date'].dt.strftime('%Y-%m-%d').values:
+                print(f"ℹ️  今日数据（{new_date}）已存在，跳过保存")
                 return
             df = pd.concat([existing, df_new], ignore_index=True)
         else:
             df = df_new
+
         df.to_csv(config['DATA_FILE'], index=False, date_format='%Y-%m-%d')
-        print(f"数据已保存至 {config['DATA_FILE']}")
+        print(f"💾 数据已保存至 {config['DATA_FILE']}")
+
     except Exception as e:
-        print(f"数据保存失败: {e}")
+        print(f"❌ 数据保存失败: {e}")
 
 def main():
     config = get_config()
     required = ['SMTP_SERVER', 'EMAIL_FROM', 'EMAIL_TO', 'SMTP_USERNAME', 'SMTP_PASSWORD']
     if any(config[k] is None for k in required):
-        print("缺少必要的邮件配置参数，请检查 secrets 设置")
+        print("❌ 缺少必要的邮件配置参数，请检查 GitHub Secrets")
         return
 
     current_data = get_market_data(config['TICKER'])
@@ -100,11 +115,9 @@ def main():
 
     daily_change = (current_data['Close'] - current_data['Open']) / current_data['Open']
 
-    # 检查是否触发警报
     if daily_change <= config['ALERT_THRESHOLD']:
         send_alert(config, current_data)
 
-    # 保存数据（save_data 内部会去重）
     save_data(config, {
         'Date': current_data.name.strftime('%Y-%m-%d'),
         'Open': current_data['Open'],
