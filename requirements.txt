@@ -1,0 +1,12 @@
+# 核心依赖
+yfinance==0.2.37
+pandas==2.1.4
+python-dotenv==1.0.0
+
+# 邮件通知相关
+secure-smtplib==0.1.1
+email-validator==2.1.1
+
+# 可选：数据分析扩展
+numpy==1.26.2
+matplotlib==3.8.2
