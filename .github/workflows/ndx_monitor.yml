@@ -39,6 +39,6 @@ jobs:
       run: |
         git config --global user.name "GitHub Actions"
         git config --global user.email "actions@github.com"
-        git add ndx_daily_data.csv
+        git add ndx_daily.csv
         git commit -m "Update NDX daily data" || echo "No changes to commit"
         git push
