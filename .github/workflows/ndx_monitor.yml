@@ -11,6 +11,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}  # 👈 关键：赋予写权限
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -40,7 +42,7 @@ jobs:
           git config --global user.email "actions@github.com"
           if [ -f "ndx_daily.csv" ]; then
             git add ndx_daily.csv
-            git commit -m "Update NDX daily data" && git push || echo "No new data to commit"
+            git commit -m "Update NDX daily data" && git push origin HEAD:${{ github.ref_name }} || echo "No new data to commit"
           else
             echo "ndx_daily.csv not generated (likely weekend/holiday). Skipping commit."
           fi
