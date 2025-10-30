@@ -21,7 +21,7 @@ def get_config():
     }
 
 def get_market_data(ticker):
-    """获取最新市场数据，并验证是否为今日交易日（UTC）"""
+    """获取最新交易数据，并验证是否为今日（UTC）交易日"""
     try:
         stock = yf.Ticker(ticker)
         # 获取最近5天数据，确保覆盖周末/节假日
@@ -33,7 +33,7 @@ def get_market_data(ticker):
         latest = hist.iloc[-1]
         latest_date = latest.name  # pandas Timestamp
 
-        # 确保时区为 UTC
+        # 统一转换为 UTC 日期
         if latest_date.tz is None:
             latest_date = latest_date.tz_localize('UTC')
         else:
@@ -42,7 +42,7 @@ def get_market_data(ticker):
         today_utc = datetime.now(timezone.utc).date()
 
         if latest_date.date() != today_utc:
-            print(f"📅 最新交易日为 {latest_date.date()}，今日（{today_utc}）无交易（周末或节假日），跳过处理")
+            print(f"📅 最新交易日 {latest_date.date()} ≠ 今日 {today_utc}，跳过（周末/节假日）")
             return None
 
         print(f"📈 获取到今日（{today_utc}）交易数据")
